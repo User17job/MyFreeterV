@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Variables para modo claro */
+  :root:not(.dark) {
+    --bg-primary: #f5f5f5;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e5e5e5;
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --border: #d1d1d1;
+  }
+
+  /* Modo claro - estilos */
+  :root:not(.dark) body {
+    @apply bg-gray-100 text-gray-900;
+  }
+
+  :root:not(.dark) .bg-dark-primary {
+    @apply bg-gray-100;
+  }
+
+  :root:not(.dark) .bg-dark-secondary {
+    @apply bg-white;
+  }
+
+  :root:not(.dark) .bg-dark-tertiary {
+    @apply bg-gray-200;
+  }
+
+  :root:not(.dark) .text-white {
+    @apply text-gray-900;
+  }
+
+  :root:not(.dark) .text-gray-400 {
+    @apply text-gray-600;
+  }
+
+  :root:not(.dark) .text-gray-500 {
+    @apply text-gray-700;
+  }
+
+  :root:not(.dark) .border-gray-800 {
+    @apply border-gray-300;
+  }
+
+  :root:not(.dark) .border-gray-700 {
+    @apply border-gray-400;
+  }
+}
