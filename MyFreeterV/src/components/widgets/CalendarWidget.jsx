@@ -122,10 +122,21 @@ export function CalendarWidget({ widget }) {
   const getDaysInMonth = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
-    return eachDayOfInterval({ start, end });
+    const days = eachDayOfInterval({ start, end });
+
+    // Obtener el día de la semana del primer día (0 = Domingo, 1 = Lunes, etc.)
+    const firstDayOfWeek = start.getDay();
+    // Ajustar para que Lunes = 0 (en vez de Domingo = 0)
+    const offset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
+    // Agregar días vacíos al inicio para alinear correctamente
+    const emptyDays = Array(offset).fill(null);
+
+    return [...emptyDays, ...days];
   };
 
   const getEventsForDay = (day) => {
+    if (!day) return [];
     return events.filter((event) => isSameDay(new Date(event.start_time), day));
   };
 
@@ -135,6 +146,8 @@ export function CalendarWidget({ widget }) {
   };
 
   const handleDayClick = (day) => {
+    if (!day) return; // No hacer nada si es un día vacío
+
     const dayEvents = getEventsForDay(day);
     setSelectedDate(day);
 
@@ -160,14 +173,14 @@ export function CalendarWidget({ widget }) {
       .insert([
         {
           user_id: user.id,
-          widget_id: widget.id, // Guardamos el widget_id del que lo creó
+          widget_id: widget.id,
           title: newEvent.title,
           description: newEvent.description,
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
           color: getTabColor(newEvent.tab),
           data: {
-            tab: newEvent.tab, // La tab a la que pertenece el evento
+            tab: newEvent.tab,
             createdFrom: isGlobalCalendar ? "global" : currentTab,
           },
         },
@@ -281,6 +294,11 @@ export function CalendarWidget({ widget }) {
         ))}
 
         {days.map((day, i) => {
+          // Si es un día vacío (null), renderizar celda vacía
+          if (!day) {
+            return <div key={i} className="aspect-square" />;
+          }
+
           const dayEvents = getEventsForDay(day);
           const isCurrentMonth = isSameMonth(day, currentDate);
           const isCurrentDay = isToday(day);
@@ -434,7 +452,7 @@ export function CalendarWidget({ widget }) {
               value: tab.id,
               label: `${tab.emoji} ${tab.label}`,
             }))}
-            disabled={!isGlobalCalendar} // Solo editable en calendario global
+            disabled={!isGlobalCalendar}
           />
           {!isGlobalCalendar && (
             <p className="text-xs text-gray-400">

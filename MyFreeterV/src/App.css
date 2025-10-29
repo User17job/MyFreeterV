@@ -1,42 +1,21 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
+:root {
+  /* Colores principales del logo RJSS */
+  --navy-blue: #2c3e50;
+  --dark-blue: #1a2332;
+  --orange-brown: #c67236;
+  --white: #ffffff;
+  --light-gray: #ecf0f1;
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+  /* Colores de UI - Acoplados al logo */
+  --bg-primary: #1a2332; /* Dark blue del logo */
+  --bg-secondary: #2c3e50; /* Navy blue del logo */
+  --bg-tertiary: #374a5e; /* Tono intermedio entre navy y dark */
+  --text-primary: #ffffff;
+  --text-secondary: #ecf0f1; /* Light gray del logo */
+  --accent: #c67236; /* Orange-brown del logo */
+  --accent-hover: #d68347;
+  --border: #374a5e; /* Tono coherente con la paleta */
+  --success: #4caf50;
+  --error: #f44336;
+  --warning: #ff9800;
 }

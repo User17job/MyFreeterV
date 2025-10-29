@@ -30,6 +30,36 @@ function App() {
     );
   }
 
+  // Si hay error de configuración, mostrar mensaje
+  if (
+    !import.meta.env.VITE_SUPABASE_URL ||
+    !import.meta.env.VITE_SUPABASE_ANON_KEY
+  ) {
+    return (
+      <div className="min-h-screen bg-dark-primary flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold text-white mb-4">
+            Configuración requerida
+          </h1>
+          <p className="text-gray-400 mb-6">
+            Para usar MyFreeterV, necesitas configurar las credenciales de
+            Supabase.
+          </p>
+          <div className="bg-dark-secondary p-4 rounded-lg text-left">
+            <p className="text-sm text-gray-300 mb-2">
+              Crea un archivo .env con:
+            </p>
+            <code className="text-xs text-orange-brown">
+              VITE_SUPABASE_URL=tu_url_aqui
+              <br />
+              VITE_SUPABASE_ANON_KEY=tu_key_aqui
+            </code>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>

@@ -1,4 +1,4 @@
-// src/store/widgetStore.js - ACTUALIZADO CON LOGS
+// src/store/widgetStore.js
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 

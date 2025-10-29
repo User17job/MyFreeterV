@@ -41,22 +41,27 @@ export const useAuthStore = create((set) => ({
 
   initialize: async () => {
     set({ loading: true });
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    set({
-      user: session?.user ?? null,
-      session,
-      loading: false,
-    });
-
-    // Escuchar cambios de autenticación
-    supabase.auth.onAuthStateChange((_event, session) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       set({
         user: session?.user ?? null,
         session,
         loading: false,
       });
-    });
+
+      // Escuchar cambios de autenticación
+      supabase.auth.onAuthStateChange((_event, session) => {
+        set({
+          user: session?.user ?? null,
+          session,
+          loading: false,
+        });
+      });
+    } catch (error) {
+      console.error("Error initializing auth:", error);
+      set({ loading: false });
+    }
   },
 }));

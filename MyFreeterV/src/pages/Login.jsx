@@ -19,7 +19,7 @@ export function Login() {
                 e.target.style.display = "none";
               }}
             />
-            <h1 className="text-3xl font-bold text-white">Freeter Cloud</h1>
+            <h1 className="text-3xl font-bold text-white">MyFreeterV</h1>
           </div>
           <p className="text-gray-400">
             Tu centro de control personal en la nube
@@ -35,7 +35,7 @@ export function Login() {
         </Card>
 
         <p className="text-center text-xs text-gray-500 mt-6">
-          Freeter Cloud © 2025 - RJSS
+          MyFreeterV © 2025 - All Rights Reserve.
         </p>
       </div>
     </div>

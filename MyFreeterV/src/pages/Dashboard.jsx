@@ -1,4 +1,8 @@
-// src/pages/Dashboard.jsx - CON HOOKS DE WIDGETS DEFAULT
+// ============================================
+// DASHBOARD.JSX - ARREGLADO
+// src/pages/Dashboard.jsx
+// ============================================
+
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
@@ -16,11 +20,33 @@ const WIDGET_TITLES = {
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState("mi-vida");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebar-collapsed");
+    return saved !== null ? saved === "true" : window.innerWidth < 1024;
+  });
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   const user = useAuthStore((state) => state.user);
   const addWidget = useWidgetStore((state) => state.addWidget);
 
   // Inicializar widgets por defecto
   useDefaultWidgets();
+
+  // Detectar cambios de viewport
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Guardar estado del sidebar (solo desktop)
+  useEffect(() => {
+    if (!isMobile) {
+      localStorage.setItem("sidebar-collapsed", sidebarCollapsed);
+    }
+  }, [sidebarCollapsed, isMobile]);
 
   const handleAddWidget = async (type) => {
     if (!user) return;
@@ -42,8 +68,14 @@ export function Dashboard() {
       onAddWidget={handleAddWidget}
       activeTab={activeTab}
       onTabChange={handleTabChange}
+      sidebarCollapsed={sidebarCollapsed}
+      onSidebarToggle={setSidebarCollapsed}
     >
-      <WidgetGrid activeTab={activeTab} />
+      <WidgetGrid
+        activeTab={activeTab}
+        sidebarCollapsed={sidebarCollapsed}
+        isMobile={isMobile}
+      />
     </DashboardLayout>
   );
 }

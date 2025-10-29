@@ -1,4 +1,8 @@
-// src/components/dashboard/WidgetGrid.jsx - OPTIMIZADO
+// ============================================
+// 4. WIDGET GRID - CON MARGEN DINÁMICO
+// src/components/dashboard/WidgetGrid.jsx
+// ============================================
+
 import { Responsive, WidthProvider } from "react-grid-layout";
 import { WidgetContainer } from "@/components/widgets/WidgetContainer";
 import { TodoWidget } from "@/components/widgets/TodoWidget";
@@ -7,7 +11,7 @@ import { NotesWidget } from "@/components/widgets/NotesWidget";
 import { TimerWidget } from "@/components/widgets/TimerWidget";
 import { LinksWidget } from "@/components/widgets/LinksWidget";
 import { useWidgetStore } from "@/store/widgetStore";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -21,14 +25,16 @@ const WIDGET_COMPONENTS = {
   links: LinksWidget,
 };
 
-export function WidgetGrid({ activeTab }) {
-  const { widgets, updateWidget, deleteWidget, updateWidgetPositions } =
-    useWidgetStore();
+export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
+  const { widgets, updateWidget, deleteWidget } = useWidgetStore();
 
   const isDraggingRef = useRef(false);
   const saveTimeoutRef = useRef(null);
+  const gridRef = useRef(null);
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // Filtrar widgets por tab actual (memoizado)
+  // Filtrar widgets por tab
   const tabWidgets = useMemo(
     () =>
       widgets.filter(
@@ -38,69 +44,163 @@ export function WidgetGrid({ activeTab }) {
     [widgets, activeTab]
   );
 
-  // Layouts memoizados
-  const layouts = useMemo(
-    () => ({
-      lg: tabWidgets.map((w) => ({
-        i: w.id,
-        x: w.position?.x || 0,
-        y: w.position?.y || 0,
-        w: w.position?.w || 4,
-        h: w.position?.h || 3,
-        minW: 2,
-        minH: 2,
-      })),
-    }),
-    [tabWidgets]
+  // Calcular margen izquierdo según estado del sidebar
+  const getMarginLeft = () => {
+    if (isMobile) return "0";
+    return sidebarCollapsed ? "64px" : "256px";
+  };
+
+  // CARGAR LAYOUTS DESDE LOCALSTORAGE
+  const loadLayoutFromStorage = useCallback(
+    (breakpoint) => {
+      try {
+        const key = `layout-${activeTab}-${breakpoint}`;
+        const saved = localStorage.getItem(key);
+
+        if (saved) {
+          const layout = JSON.parse(saved);
+          const currentWidgetIds = tabWidgets.map((w) => w.id);
+          return layout.filter((item) => currentWidgetIds.includes(item.i));
+        }
+      } catch (e) {
+        console.error("Error loading layout:", e);
+      }
+      return null;
+    },
+    [activeTab, tabWidgets]
   );
 
-  // Guardar posiciones con debounce
+  // GUARDAR LAYOUTS EN LOCALSTORAGE
+  const saveLayoutToStorage = useCallback(
+    (layout, breakpoint) => {
+      try {
+        const key = `layout-${activeTab}-${breakpoint}`;
+        localStorage.setItem(key, JSON.stringify(layout));
+      } catch (e) {
+        console.error("Error saving layout:", e);
+      }
+    },
+    [activeTab]
+  );
+
+  // LAYOUTS CON LOCALSTORAGE Y FALLBACK
+  const layouts = useMemo(() => {
+    const savedLg = loadLayoutFromStorage("lg");
+    const savedMd = loadLayoutFromStorage("md");
+    const savedSm = loadLayoutFromStorage("sm");
+
+    const currentWidgetIds = new Set(tabWidgets.map((w) => w.id));
+
+    const isLayoutValid = (layout) => {
+      if (!layout || layout.length !== tabWidgets.length) return false;
+      return layout.every((item) => currentWidgetIds.has(item.i));
+    };
+
+    const defaultLgLayout = tabWidgets.map((w, index) => ({
+      i: w.id,
+      x: (index % 3) * 4,
+      y: Math.floor(index / 3) * 3,
+      w: 4,
+      h: 3,
+      minW: 2,
+      minH: 2,
+    }));
+
+    const defaultMdLayout = tabWidgets.map((w, index) => ({
+      i: w.id,
+      x: (index % 2) * 3,
+      y: Math.floor(index / 2) * 3,
+      w: 3,
+      h: 3,
+      minW: 2,
+      minH: 2,
+    }));
+
+    const defaultSmLayout = tabWidgets.map((w, index) => ({
+      i: w.id,
+      x: 0,
+      y: index * 4,
+      w: 1,
+      h: 4,
+      minW: 1,
+      minH: 3,
+    }));
+
+    return {
+      lg: isLayoutValid(savedLg) ? savedLg : defaultLgLayout,
+      md: isLayoutValid(savedMd) ? savedMd : defaultMdLayout,
+      sm: isLayoutValid(savedSm) ? savedSm : defaultSmLayout,
+      xs: isLayoutValid(savedSm) ? savedSm : defaultSmLayout,
+    };
+  }, [tabWidgets, loadLayoutFromStorage]);
+
   const handleLayoutChange = useCallback(
-    (layout) => {
-      // Limpiar timeout anterior
+    (layout, allLayouts) => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
 
-      // Esperar 500ms después del último cambio para guardar
       saveTimeoutRef.current = setTimeout(() => {
         if (!isDraggingRef.current) {
-          updateWidgetPositions(layout);
+          Object.entries(allLayouts).forEach(([breakpoint, layoutData]) => {
+            saveLayoutToStorage(layoutData, breakpoint);
+          });
         }
       }, 500);
     },
-    [updateWidgetPositions]
+    [saveLayoutToStorage]
   );
 
-  // Detectar cuando empieza el drag
   const handleDragStart = useCallback(() => {
     isDraggingRef.current = true;
   }, []);
 
-  // Detectar cuando termina el drag y guardar
   const handleDragStop = useCallback(
-    (layout) => {
+    (layout, oldItem, newItem) => {
       isDraggingRef.current = false;
-      updateWidgetPositions(layout);
+      const breakpoint = getCurrentBreakpoint();
+      saveLayoutToStorage(layout, breakpoint);
     },
-    [updateWidgetPositions]
+    [saveLayoutToStorage]
   );
 
-  // Detectar cuando termina el resize y guardar
   const handleResizeStop = useCallback(
-    (layout) => {
-      updateWidgetPositions(layout);
+    (layout, oldItem, newItem) => {
+      const breakpoint = getCurrentBreakpoint();
+      saveLayoutToStorage(layout, breakpoint);
     },
-    [updateWidgetPositions]
+    [saveLayoutToStorage]
   );
+
+  const getCurrentBreakpoint = () => {
+    const width = window.innerWidth;
+    if (width >= 1200) return "lg";
+    if (width >= 996) return "md";
+    if (width >= 768) return "sm";
+    return "xs";
+  };
 
   const handleDelete = useCallback(
     async (widgetId) => {
       if (window.confirm("¿Estás seguro de eliminar este widget?")) {
         await deleteWidget(widgetId);
+
+        ["lg", "md", "sm", "xs"].forEach((breakpoint) => {
+          try {
+            const key = `layout-${activeTab}-${breakpoint}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+              const layout = JSON.parse(saved);
+              const newLayout = layout.filter((item) => item.i !== widgetId);
+              localStorage.setItem(key, JSON.stringify(newLayout));
+            }
+          } catch (e) {
+            console.error("Error cleaning layout:", e);
+          }
+        });
       }
     },
-    [deleteWidget]
+    [deleteWidget, activeTab]
   );
 
   const handleTitleChange = useCallback(
@@ -110,26 +210,42 @@ export function WidgetGrid({ activeTab }) {
     [updateWidget]
   );
 
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <div className="p-6 h-full">
+    <div
+      ref={containerRef}
+      className={`p-4 md:p-6 min-h-full transition-all duration-300 ${
+        isMobile ? "pb-24" : ""
+      }`}
+      style={{ marginLeft: getMarginLeft() }}
+    >
       <ResponsiveGridLayout
+        ref={gridRef}
         className="layout"
         layouts={layouts}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        rowHeight={150}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
+        cols={{ lg: 12, md: 6, sm: 1, xs: 1 }}
+        rowHeight={isMobile ? 100 : 150}
         onLayoutChange={handleLayoutChange}
         onDragStart={handleDragStart}
         onDragStop={handleDragStop}
         onResizeStop={handleResizeStop}
         draggableHandle=".drag-handle"
         containerPadding={[0, 0]}
-        margin={[16, 16]}
+        margin={isMobile ? [12, 12] : [16, 16]}
         isDraggable={true}
         isResizable={true}
         compactType="vertical"
         preventCollision={false}
         useCSSTransforms={true}
+        transformScale={1}
       >
         {tabWidgets.map((widget) => {
           const WidgetComponent = WIDGET_COMPONENTS[widget.type];
@@ -144,6 +260,7 @@ export function WidgetGrid({ activeTab }) {
                 onTitleChange={(newTitle) =>
                   handleTitleChange(widget.id, newTitle)
                 }
+                isMobile={isMobile}
               >
                 <WidgetComponent widget={widget} />
               </WidgetContainer>
@@ -154,13 +271,15 @@ export function WidgetGrid({ activeTab }) {
 
       {tabWidgets.length === 0 && (
         <div className="h-full flex items-center justify-center">
-          <div className="text-center">
+          <div className="text-center px-4">
             <div className="text-6xl mb-4">📦</div>
             <h3 className="text-xl font-semibold text-white mb-2">
               No hay widgets en este dashboard
             </h3>
-            <p className="text-gray-400">
-              Usa el menú lateral para agregar tu primer widget
+            <p className="text-gray-400 text-sm md:text-base">
+              {isMobile
+                ? "Toca el botón de menú para agregar widgets"
+                : "Usa el menú lateral para agregar tu primer widget"}
             </p>
           </div>
         </div>
