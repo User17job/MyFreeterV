@@ -1,5 +1,5 @@
 // ============================================
-// SIDEBAR.JSX - CON FIXED POSITION Y SCROLL ARREGLADO
+// SIDEBAR.JSX - MOBILE Y DESKTOP CON FUNCIONALIDAD COMPLETA
 // src/components/dashboard/Sidebar.jsx
 // ============================================
 
@@ -102,10 +102,44 @@ export function Sidebar({
           <div className="flex flex-col h-full">
             {/* Header visible */}
             <div className="p-4 border-b border-gray-800 flex items-center justify-between shrink-0">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <LayoutDashboard size={18} />
-                <span className="truncate">{workspaceName}</span>
-              </h2>
+              {editingWorkspace ? (
+                <div className="flex items-center gap-2 flex-1">
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveWorkspaceName();
+                      if (e.key === "Escape") setEditingWorkspace(false);
+                    }}
+                    className="flex-1 text-base font-semibold bg-dark-primary text-white px-2 py-1 rounded border border-orange focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    onClick={saveWorkspaceName}
+                    className="text-green-500 shrink-0"
+                  >
+                    <Check size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-base font-semibold text-white flex items-center gap-2 flex-1 min-w-0">
+                    <LayoutDashboard size={18} className="shrink-0" />
+                    <span className="truncate">{workspaceName}</span>
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setEditValue(workspaceName);
+                      setEditingWorkspace(true);
+                    }}
+                    className="p-1 hover:bg-dark-tertiary rounded text-gray-400 hover:text-white transition-colors shrink-0"
+                    title="Editar nombre"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Content con scroll */}
@@ -157,23 +191,74 @@ export function Sidebar({
                 </div>
                 <div className="space-y-1">
                   {tabs.map((tab) => (
-                    <button
+                    <div
                       key={tab.id}
-                      onClick={() => {
-                        onTabChange(tab.id);
-                        onToggleCollapse();
-                      }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center gap-2 ${
-                        activeTab === tab.id
-                          ? "bg-orange text-white"
-                          : "text-gray-300 hover:bg-dark-tertiary hover:text-white"
+                      className={`rounded-lg transition-colors ${
+                        activeTab === tab.id ? "bg-orange" : ""
                       }`}
                     >
-                      <span>{tab.emoji}</span>
-                      <span className="flex-1 truncate text-sm">
-                        {tab.label}
-                      </span>
-                    </button>
+                      {editingTabId === tab.id ? (
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <span className="shrink-0">{tab.emoji}</span>
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveTabEdit(tab.id);
+                              if (e.key === "Escape") setEditingTabId(null);
+                            }}
+                            className="flex-1 text-sm bg-dark-primary text-white px-2 py-1 rounded border border-orange focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => saveTabEdit(tab.id)}
+                            className="text-green-500 shrink-0"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            onTabChange(tab.id);
+                            onToggleCollapse();
+                          }}
+                          className={`w-full text-left px-3 py-2.5 transition-colors flex items-center gap-2 group ${
+                            activeTab === tab.id
+                              ? "text-white"
+                              : "text-gray-300 hover:bg-dark-tertiary hover:text-white"
+                          }`}
+                        >
+                          <span className="shrink-0">{tab.emoji}</span>
+                          <span className="flex-1 truncate text-sm">
+                            {tab.label}
+                          </span>
+                          {!tab.isDefault && (
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingTab(tab);
+                                }}
+                                className="p-1 hover:bg-dark-primary rounded text-gray-400 hover:text-white"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTab(tab.id);
+                                }}
+                                className="p-1 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -346,7 +431,6 @@ export function Sidebar({
                   <button
                     onClick={() => {
                       onTabChange(tab.id);
-                      onToggleCollapse();
                     }}
                     className={`w-full text-left px-3 py-2.5 transition-colors flex items-center gap-2 group ${
                       activeTab === tab.id
