@@ -341,7 +341,7 @@ export function Settings() {
         </Card>
 
         {/* Notificaciones */}
-        <Card className="p-6">
+        {/* <Card className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <Bell className="text-orange" size={24} />
             <h2 className="text-lg font-semibold text-white">Notificaciones</h2>
@@ -375,7 +375,7 @@ export function Settings() {
               <span className="text-white">Fin de timer</span>
             </label>
           </div>
-        </Card>
+        </Card> */}
 
         {/* Datos */}
         <Card className="p-6">
