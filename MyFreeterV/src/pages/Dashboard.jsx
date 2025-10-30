@@ -9,6 +9,7 @@ import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { useWidgetStore } from "@/store/widgetStore";
 import { useAuthStore } from "@/store/authStore";
 import { useDefaultWidgets } from "@/hooks/useDefaultWidgets";
+import { useTabsStore } from "@/store/tabsStore";
 
 const WIDGET_TITLES = {
   todo: "Lista de Tareas",
@@ -25,7 +26,7 @@ export function Dashboard() {
     return saved !== null ? saved === "true" : window.innerWidth < 1024;
   });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
+  const initializeTabs = useTabsStore((state) => state.initializeTabs);
   const user = useAuthStore((state) => state.user);
   const addWidget = useWidgetStore((state) => state.addWidget);
 
@@ -47,6 +48,12 @@ export function Dashboard() {
       localStorage.setItem("sidebar-collapsed", sidebarCollapsed);
     }
   }, [sidebarCollapsed, isMobile]);
+
+  useEffect(() => {
+    if (user) {
+      initializeTabs(user.id);
+    }
+  }, [user, initializeTabs]);
 
   const handleAddWidget = async (type) => {
     if (!user) return;
