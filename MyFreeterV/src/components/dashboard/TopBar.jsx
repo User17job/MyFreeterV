@@ -49,14 +49,14 @@ export function TopBar({ onSidebarToggle, isMobile }) {
           <img
             src="/logo.png"
             alt="Logo"
-            className="h-10 w-10 object-contain"
+            className="h-12 w-55 object-contain"
             onError={(e) => {
               e.target.style.display = "none";
             }}
           />
-          <h1 className="text-lg md:text-xl font-bold text-white">
+          {/* <h1 className="text-lg md:text-xl font-bold text-white">
             MyFreeterV
-          </h1>
+          </h1> */}
         </div>
       </div>
 

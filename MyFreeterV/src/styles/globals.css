@@ -1,52 +1,131 @@
+/* Estilos globales basados en el logo RJSS */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* Variables para modo claro */
+  /* ============================================
+     VARIABLES CSS PARA MODO CLARO
+     ============================================ */
   :root:not(.dark) {
-    --bg-primary: #f5f5f5;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #e5e5e5;
-    --text-primary: #1a1a1a;
-    --text-secondary: #666666;
-    --border: #d1d1d1;
+    --bg-primary: #ffffff;
+    --bg-secondary: #e8e8e8;
+    --bg-tertiary: #dce3e6;
+    --text-primary: #1a252f;
+    --text-secondary: #2c3e50;
+    --border: #c6cdd0;
+    --accent: #8b5a3c;
+    --accent-hover: #a0674b;
   }
 
-  /* Modo claro - estilos */
+  /* ============================================
+     VARIABLES CSS PARA MODO OSCURO (DEFAULT)
+     ============================================ */
+  :root.dark,
+  :root {
+    --bg-primary: #1a252f; /* Dark blue del logo */
+    --bg-secondary: #2c3e50; /* Navy blue del logo */
+    --bg-tertiary: #4a5f7f; /* Steel blue */
+    --text-primary: #ffffff;
+    --text-secondary: #e8e8e8;
+    --border: #4a5f7f;
+    --accent: #8b5a3c; /* Marrón cálido del logo */
+    --accent-hover: #a0674b; /* Terracota */
+  }
+
+  /* ============================================
+     MODO CLARO - APLICACIÓN DE COLORES
+     ============================================ */
   :root:not(.dark) body {
-    @apply bg-gray-100 text-gray-900;
+    @apply bg-white text-[#1a252f];
   }
 
   :root:not(.dark) .bg-dark-primary {
-    @apply bg-gray-100;
+    background-color: var(--bg-primary);
   }
 
   :root:not(.dark) .bg-dark-secondary {
-    @apply bg-white;
+    background-color: var(--bg-secondary);
   }
 
   :root:not(.dark) .bg-dark-tertiary {
-    @apply bg-gray-200;
+    background-color: var(--bg-tertiary);
   }
 
   :root:not(.dark) .text-white {
-    @apply text-gray-900;
+    color: var(--text-primary);
   }
 
   :root:not(.dark) .text-gray-400 {
-    @apply text-gray-600;
+    color: var(--text-secondary);
   }
 
   :root:not(.dark) .text-gray-500 {
-    @apply text-gray-700;
+    color: #4a5f7f;
   }
 
   :root:not(.dark) .border-gray-800 {
-    @apply border-gray-300;
+    border-color: var(--border);
   }
 
   :root:not(.dark) .border-gray-700 {
-    @apply border-gray-400;
+    border-color: #4a5f7f;
+  }
+
+  /* ============================================
+     MODO OSCURO - APLICACIÓN DE COLORES
+     ============================================ */
+  :root.dark body,
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  :root.dark .bg-dark-primary,
+  .bg-dark-primary {
+    background-color: var(--bg-primary);
+  }
+
+  :root.dark .bg-dark-secondary,
+  .bg-dark-secondary {
+    background-color: var(--bg-secondary);
+  }
+
+  :root.dark .bg-dark-tertiary,
+  .bg-dark-tertiary {
+    background-color: var(--bg-tertiary);
+  }
+}
+
+/* ============================================
+   CLASES PERSONALIZADAS CON PALETA RJSS
+   ============================================ */
+@layer utilities {
+  .text-accent {
+    color: var(--accent);
+  }
+
+  .bg-accent {
+    background-color: var(--accent);
+  }
+
+  .border-accent {
+    border-color: var(--accent);
+  }
+
+  .hover-accent:hover {
+    background-color: var(--accent-hover);
+  }
+
+  /* Sombras con colores del logo */
+  .shadow-accent {
+    box-shadow: 0 4px 6px -1px rgba(139, 90, 60, 0.1),
+      0 2px 4px -1px rgba(139, 90, 60, 0.06);
+  }
+
+  .shadow-navy {
+    box-shadow: 0 4px 6px -1px rgba(44, 62, 80, 0.2),
+      0 2px 4px -1px rgba(44, 62, 80, 0.1);
   }
 }

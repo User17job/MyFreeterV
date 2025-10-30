@@ -1,21 +1,104 @@
-:root {
-  /* Colores principales del logo RJSS */
-  --navy-blue: #2c3e50;
-  --dark-blue: #1a2332;
-  --orange-brown: #c67236;
-  --white: #ffffff;
-  --light-gray: #ecf0f1;
+/* app.css - Sistema de colores basado en el logo RJSS */
 
-  /* Colores de UI - Acoplados al logo */
-  --bg-primary: #1a2332; /* Dark blue del logo */
-  --bg-secondary: #2c3e50; /* Navy blue del logo */
-  --bg-tertiary: #374a5e; /* Tono intermedio entre navy y dark */
-  --text-primary: #ffffff;
-  --text-secondary: #ecf0f1; /* Light gray del logo */
-  --accent: #c67236; /* Orange-brown del logo */
-  --accent-hover: #d68347;
-  --border: #374a5e; /* Tono coherente con la paleta */
+:root {
+  /* ============================================
+     COLORES PRINCIPALES DEL LOGO
+     ============================================ */
+  --navy-blue: #2c3e50; /* Azul del birrete */
+  --dark-blue: #1a252f; /* Azul oscuro profundo */
+  --steel-blue: #4a5f7f; /* Azul acero complementario */
+  --warm-brown: #8b5a3c; /* Marrón de la banda */
+  --terracota: #a0674b; /* Terracota para acentos */
+  --white: #ffffff; /* Blanco limpio */
+  --soft-gray: #e8e8e8; /* Gris suave */
+  --black: #000000; /* Negro sólido */
+
+  /* ============================================
+     COLORES DE UI - TEMA OSCURO
+     ============================================ */
+  --bg-primary: #1a252f; /* Dark blue como fondo principal */
+  --bg-secondary: #2c3e50; /* Navy blue para superficies */
+  --bg-tertiary: #4a5f7f; /* Steel blue para elementos elevados */
+
+  --text-primary: #ffffff; /* Texto principal blanco */
+  --text-secondary: #e8e8e8; /* Texto secundario gris suave */
+
+  --accent: #8b5a3c; /* Marrón cálido como acento principal */
+  --accent-hover: #a0674b; /* Terracota para hover */
+
+  --border: #4a5f7f; /* Steel blue para bordes */
+
+  /* Estados */
   --success: #4caf50;
   --error: #f44336;
   --warning: #ff9800;
+  --info: #2196f3;
+}
+
+/* ============================================
+   MODO CLARO (OPCIONAL)
+   ============================================ */
+:root.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #e8e8e8;
+  --bg-tertiary: #dce3e6;
+
+  --text-primary: #1a252f;
+  --text-secondary: #2c3e50;
+
+  --accent: #8b5a3c;
+  --accent-hover: #a0674b;
+
+  --border: #c6cdd0;
+}
+
+/* ============================================
+   CLASES AUXILIARES DEL LOGO
+   ============================================ */
+.bg-navy {
+  background-color: var(--navy-blue);
+}
+
+.bg-dark {
+  background-color: var(--dark-blue);
+}
+
+.bg-steel {
+  background-color: var(--steel-blue);
+}
+
+.bg-accent {
+  background-color: var(--accent);
+}
+
+.bg-terracota {
+  background-color: var(--terracota);
+}
+
+.text-navy {
+  color: var(--navy-blue);
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+.text-terracota {
+  color: var(--terracota);
+}
+
+.border-accent {
+  border-color: var(--accent);
+}
+
+.border-navy {
+  border-color: var(--navy-blue);
+}
+
+.hover-accent:hover {
+  background-color: var(--accent-hover);
+}
+
+.hover-navy:hover {
+  background-color: var(--navy-blue);
 }
