@@ -1,4 +1,4 @@
-// src/components/widgets/CalendarWidget.jsx - CORREGIDO
+// src/components/widgets/CalendarWidget.jsx - CORREGIDO CON MODAL RESPONSIVE
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Clock } from "lucide-react";
 import {
@@ -338,7 +338,7 @@ export function CalendarWidget({ widget }) {
         })}
       </div>
 
-      {/* Modal para ver eventos del día */}
+      {/* Modal para ver eventos del día - CON PORTAL */}
       <Modal
         isOpen={showDayEventsModal}
         onClose={() => setShowDayEventsModal(false)}
@@ -357,7 +357,7 @@ export function CalendarWidget({ widget }) {
           </Button>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto">
           {selectedDateEvents.length === 0 ? (
             <p className="text-center text-gray-500 py-8">
               No hay eventos este día
@@ -404,7 +404,7 @@ export function CalendarWidget({ widget }) {
         </div>
       </Modal>
 
-      {/* Modal para agregar evento */}
+      {/* Modal para agregar evento - CON PORTAL */}
       <Modal
         isOpen={showEventModal}
         onClose={() => setShowEventModal(false)}

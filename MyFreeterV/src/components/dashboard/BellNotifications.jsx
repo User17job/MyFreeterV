@@ -68,7 +68,7 @@ export function BellNotifications() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-96 bg-dark-secondary border border-gray-800 rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden flex flex-col">
+        <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] bg-dark-secondary border border-gray-800 rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="p-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-white font-semibold flex items-center gap-2">

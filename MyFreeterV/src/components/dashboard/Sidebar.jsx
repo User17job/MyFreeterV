@@ -344,7 +344,10 @@ export function Sidebar({
                   </div>
                 ) : (
                   <button
-                    onClick={() => onTabChange(tab.id)}
+                    onClick={() => {
+                      onTabChange(tab.id);
+                      onToggleCollapse();
+                    }}
                     className={`w-full text-left px-3 py-2.5 transition-colors flex items-center gap-2 group ${
                       activeTab === tab.id
                         ? "text-white"
@@ -354,7 +357,7 @@ export function Sidebar({
                     <span className="shrink-0">{tab.emoji}</span>
                     <span className="flex-1 truncate text-sm">{tab.label}</span>
                     {!tab.isDefault && (
-                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
