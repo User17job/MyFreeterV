@@ -1,4 +1,4 @@
-// src/components/widgets/TimerWidget.jsx - CON NOMBRE PERSONALIZADO
+// src/components/widgets/TimerWidget.jsx - SEGURO PARA MÓVIL
 import { useState, useEffect, useRef } from "react";
 import {
   Play,
@@ -17,16 +17,15 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { useTimerStore } from "@/store/timerStore";
 import { notifyTimerComplete } from "@/utils/notificationUtils";
-import { SoundSettings } from "./SoundSettings";
 
 export function TimerWidget({ widget }) {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [showSoundModal, setShowSoundModal] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState(
-    Notification.permission
-  );
-  const [isEditingName, setIsEditingName] = useState(false); // ⭐ NUEVO
-  const [tempName, setTempName] = useState(""); // ⭐ NUEVO
+  const [notificationPermission, setNotificationPermission] =
+    useState("default");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [isClient, setIsClient] = useState(false);
 
   const {
     getTimer,
@@ -36,38 +35,61 @@ export function TimerWidget({ widget }) {
     reset,
     setMode,
     setCustomMinutes,
-    setTimerName, // ⭐ NUEVO
+    setTimerName,
     complete,
     getActiveTimersCount,
     soundSettings,
   } = useTimerStore();
 
   const timer = getTimer(widget.id);
-  const { mode, customMinutes, isRunning, name } = timer; // ⭐ NUEVO: name
+  const { mode, customMinutes, isRunning, name } = timer;
 
-  const [displayTime, setDisplayTime] = useState(getRemainingTime(widget.id));
+  const [displayTime, setDisplayTime] = useState(0);
   const [localCustomMinutes, setLocalCustomMinutes] = useState(customMinutes);
 
   const audioRef = useRef(null);
   const updateIntervalRef = useRef(null);
   const hasCompletedRef = useRef(false);
 
+  // 🔥 ESPERAR A QUE EL CLIENTE ESTÉ LISTO
   useEffect(() => {
-    if ("Notification" in window) {
+    setIsClient(true);
+  }, []);
+
+  // 🔥 VERIFICAR NOTIFICACIONES SOLO EN CLIENTE
+  useEffect(() => {
+    if (!isClient) return;
+
+    if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(Notification.permission);
     }
-  }, []);
+  }, [isClient]);
+
+  // Inicializar displayTime solo cuando el cliente esté listo
+  useEffect(() => {
+    if (isClient && widget?.id) {
+      setDisplayTime(getRemainingTime(widget.id));
+    }
+  }, [isClient, widget?.id, getRemainingTime]);
 
   useEffect(() => {
     return () => {
       if (updateIntervalRef.current) {
         clearInterval(updateIntervalRef.current);
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, []);
 
   const requestNotificationPermission = async () => {
-    if (!("Notification" in window)) {
+    if (
+      !isClient ||
+      typeof window === "undefined" ||
+      !("Notification" in window)
+    ) {
       alert("Tu navegador no soporta notificaciones");
       return;
     }
@@ -88,6 +110,8 @@ export function TimerWidget({ widget }) {
   };
 
   useEffect(() => {
+    if (!isClient) return;
+
     if (isRunning) {
       hasCompletedRef.current = false;
 
@@ -114,43 +138,53 @@ export function TimerWidget({ widget }) {
         clearInterval(updateIntervalRef.current);
       }
     };
-  }, [isRunning, widget.id, getRemainingTime, complete]);
+  }, [isRunning, widget.id, getRemainingTime, complete, isClient]);
 
   const playSound = () => {
-    if (soundSettings.selectedTone === "none") {
+    if (!isClient || soundSettings.selectedTone === "none") {
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    audioRef.current = new Audio(`/tones/${soundSettings.selectedTone}.mp3`);
-    audioRef.current.volume = soundSettings.volume;
-
-    audioRef.current
-      .play()
-      .catch((err) => console.log("Error reproduciendo audio:", err));
-
-    let count = 0;
-    const soundInterval = setInterval(() => {
-      count++;
-      if (count >= soundSettings.repeat) {
-        clearInterval(soundInterval);
-      } else {
-        const repeatAudio = new Audio(
-          `/tones/${soundSettings.selectedTone}.mp3`
-        );
-        repeatAudio.volume = soundSettings.volume;
-        repeatAudio
-          .play()
-          .catch((err) => console.log("Error reproduciendo audio:", err));
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
       }
-    }, 1500);
+
+      audioRef.current = new Audio(`/tones/${soundSettings.selectedTone}.mp3`);
+      audioRef.current.volume = soundSettings.volume;
+
+      audioRef.current
+        .play()
+        .catch((err) => console.log("Error reproduciendo audio:", err));
+
+      let count = 0;
+      const soundInterval = setInterval(() => {
+        count++;
+        if (count >= soundSettings.repeat) {
+          clearInterval(soundInterval);
+        } else {
+          try {
+            const repeatAudio = new Audio(
+              `/tones/${soundSettings.selectedTone}.mp3`
+            );
+            repeatAudio.volume = soundSettings.volume;
+            repeatAudio
+              .play()
+              .catch((err) => console.log("Error reproduciendo audio:", err));
+          } catch (err) {
+            console.error("Error creating audio:", err);
+          }
+        }
+      }, 1500);
+    } catch (error) {
+      console.error("Error playing sound:", error);
+    }
   };
 
   const onTimerComplete = () => {
+    if (!isClient) return;
+
     playSound();
 
     const modes = {
@@ -160,16 +194,17 @@ export function TimerWidget({ widget }) {
       custom: customMinutes,
     };
 
-    // ⭐ MODIFICADO: Incluir nombre en la notificación
     const timerLabel = name || `Timer ${mode}`;
     notifyTimerComplete(mode, modes[mode], timerLabel);
 
-    const originalTitle = document.title;
-    document.title = `⏰ ${timerLabel} completado!`;
+    if (typeof document !== "undefined") {
+      const originalTitle = document.title;
+      document.title = `⏰ ${timerLabel} completado!`;
 
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 5000);
+      setTimeout(() => {
+        document.title = originalTitle;
+      }, 5000);
+    }
   };
 
   const formatTime = (seconds) => {
@@ -180,7 +215,6 @@ export function TimerWidget({ widget }) {
       .padStart(2, "0")}`;
   };
 
-  // ⭐ NUEVO: Handlers para nombre
   const handleStartEditName = () => {
     setTempName(name || "");
     setIsEditingName(true);
@@ -220,6 +254,15 @@ export function TimerWidget({ widget }) {
     }
   };
 
+  // 🔥 NO RENDERIZAR HASTA QUE EL CLIENTE ESTÉ LISTO
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-gray-400 text-sm">Cargando timer...</div>
+      </div>
+    );
+  }
+
   const modes = {
     pomodoro: 25 * 60,
     short: 5 * 60,
@@ -227,11 +270,9 @@ export function TimerWidget({ widget }) {
     custom: customMinutes * 60,
   };
   const totalTime = modes[mode];
-  const progress = ((totalTime - displayTime) / totalTime) * 100;
+  const progress =
+    totalTime > 0 ? ((totalTime - displayTime) / totalTime) * 100 : 0;
 
-  const activeCount = getActiveTimersCount();
-
-  // ⭐ NUEVO: Obtener label del modo
   const getModeLabel = () => {
     const labels = {
       pomodoro: "🍅 Pomodoro",
@@ -243,251 +284,151 @@ export function TimerWidget({ widget }) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-6 py-4">
-      {/* ⭐ NUEVO: Sección de nombre editable */}
-      <div className="w-full">
+    <div className="space-y-4">
+      {/* Nombre del timer editable */}
+      <div className="text-center">
         {isEditingName ? (
-          <div className="flex items-center gap-2">
-            <Input
+          <div className="flex items-center gap-2 justify-center">
+            <input
+              type="text"
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}
-              placeholder="Nombre del timer..."
-              className="flex-1 text-sm"
-              maxLength={30}
-              autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSaveName();
                 if (e.key === "Escape") handleCancelEditName();
               }}
+              className="flex-1 max-w-[150px] text-sm bg-dark-primary text-white px-2 py-1 rounded border border-orange focus:outline-none"
+              placeholder="Nombre del timer"
+              autoFocus
             />
             <button
               onClick={handleSaveName}
-              className="p-2 hover:bg-dark-tertiary rounded transition-colors text-green-500"
-              title="Guardar"
+              className="text-green-500 hover:text-green-400"
             >
-              <Check size={18} />
+              <Check size={16} />
             </button>
             <button
               onClick={handleCancelEditName}
-              className="p-2 hover:bg-dark-tertiary rounded transition-colors text-gray-400"
-              title="Cancelar"
+              className="text-red-500 hover:text-red-400"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-2 group">
-            <h3 className="text-lg font-semibold text-white text-center">
-              {name || getModeLabel()}
-            </h3>
-            <button
-              onClick={handleStartEditName}
-              className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-dark-tertiary rounded transition-all text-gray-400 hover:text-white"
-              title="Editar nombre"
-            >
-              <Edit2 size={16} />
-            </button>
-          </div>
-        )}
-        {name && !isEditingName && (
-          <p className="text-xs text-gray-400 text-center mt-1">
-            {getModeLabel()}
-          </p>
-        )}
-      </div>
-
-      {/* Indicador de timers activos */}
-      {activeCount > 0 && (
-        <div className="w-full bg-orange/10 border border-orange/30 rounded-lg p-2 text-center">
-          <p className="text-xs text-orange font-medium">
-            {activeCount === 1
-              ? isRunning
-                ? `⏱️ ${name || "Este timer"} está corriendo`
-                : `⏱️ Hay 1 timer activo en otro dashboard`
-              : `⏱️ Hay ${activeCount} timers activos`}
-          </p>
-        </div>
-      )}
-
-      {/* Botones de configuración */}
-      <div className="w-full flex gap-2">
-        {notificationPermission !== "granted" && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={requestNotificationPermission}
-            className="flex-1 flex items-center justify-center gap-2 text-xs"
+          <button
+            onClick={handleStartEditName}
+            className="text-gray-400 hover:text-white text-sm flex items-center gap-1 mx-auto"
           >
-            <Bell size={14} />
-            Activar notificaciones
-          </Button>
+            {name || "Sin nombre"}
+            <Edit2 size={12} />
+          </button>
         )}
-
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setShowSoundModal(true)}
-          className="flex-1 flex items-center justify-center gap-2 text-xs"
-          title="Configurar sonido de alarma"
-        >
-          <Volume2 size={14} />
-          Sonido
-        </Button>
       </div>
 
-      {notificationPermission === "granted" && (
-        <div className="flex items-center gap-2 text-xs text-green-500">
-          <Bell size={14} />
-          <span>Notificaciones activas</span>
+      {/* Display del tiempo */}
+      <div className="text-center">
+        <div className="text-5xl font-bold text-white mb-2">
+          {formatTime(displayTime)}
         </div>
-      )}
+        <p className="text-sm text-gray-400">{getModeLabel()}</p>
 
-      {notificationPermission === "denied" && (
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <BellOff size={14} />
-          <span>Notificaciones bloqueadas</span>
-        </div>
-      )}
-
-      {/* Botones de modo */}
-      <div className="flex gap-2 flex-wrap justify-center">
-        <button
-          onClick={() => handleModeChange("pomodoro")}
-          className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-            mode === "pomodoro"
-              ? "bg-orange text-white"
-              : "bg-dark-tertiary text-gray-400 hover:text-white"
-          }`}
-        >
-          🍅 Pomodoro
-        </button>
-        <button
-          onClick={() => handleModeChange("short")}
-          className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-            mode === "short"
-              ? "bg-orange text-white"
-              : "bg-dark-tertiary text-gray-400 hover:text-white"
-          }`}
-        >
-          ☕ Breve
-        </button>
-        <button
-          onClick={() => handleModeChange("long")}
-          className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-            mode === "long"
-              ? "bg-orange text-white"
-              : "bg-dark-tertiary text-gray-400 hover:text-white"
-          }`}
-        >
-          🌙 Largo
-        </button>
-        <button
-          onClick={() => setShowCustomModal(true)}
-          className={`px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1 ${
-            mode === "custom"
-              ? "bg-orange text-white"
-              : "bg-dark-tertiary text-gray-400 hover:text-white"
-          }`}
-        >
-          <Settings size={12} />
-          {mode === "custom" ? `⏱️ ${customMinutes}min` : "Custom"}
-        </button>
-      </div>
-
-      {/* Timer circular */}
-      <div className="relative w-48 h-48">
-        <svg className="transform -rotate-90 w-48 h-48">
-          <circle
-            cx="96"
-            cy="96"
-            r="88"
-            stroke="currentColor"
-            strokeWidth="8"
-            fill="none"
-            className="text-dark-tertiary"
+        {/* Barra de progreso */}
+        <div className="w-full bg-dark-tertiary rounded-full h-2 mt-4">
+          <div
+            className="bg-orange h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
           />
-          <circle
-            cx="96"
-            cy="96"
-            r="88"
-            stroke="currentColor"
-            strokeWidth="8"
-            fill="none"
-            strokeDasharray={`${2 * Math.PI * 88}`}
-            strokeDashoffset={`${2 * Math.PI * 88 * (1 - progress / 100)}`}
-            className="text-orange transition-all duration-1000"
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-4xl font-bold text-white">
-            {formatTime(displayTime)}
-          </span>
         </div>
       </div>
 
       {/* Controles */}
-      <div className="flex gap-3">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={handleToggleRunning}
-          className="w-16 h-16 rounded-full"
-        >
-          {isRunning ? <Pause size={24} /> : <Play size={24} />}
+      <div className="flex gap-2 justify-center">
+        <Button onClick={handleToggleRunning} size="sm">
+          {isRunning ? <Pause size={16} /> : <Play size={16} />}
+        </Button>
+        <Button onClick={handleReset} variant="ghost" size="sm">
+          <RotateCcw size={16} />
         </Button>
         <Button
+          onClick={() => setShowSoundModal(true)}
           variant="ghost"
-          size="lg"
-          onClick={handleReset}
-          className="w-16 h-16 rounded-full"
+          size="sm"
         >
-          <RotateCcw size={24} />
+          <Volume2 size={16} />
+        </Button>
+        <Button
+          onClick={
+            notificationPermission === "granted"
+              ? undefined
+              : requestNotificationPermission
+          }
+          variant="ghost"
+          size="sm"
+          title={
+            notificationPermission === "granted"
+              ? "Notificaciones activas"
+              : "Activar notificaciones"
+          }
+        >
+          {notificationPermission === "granted" ? (
+            <Bell size={16} className="text-green-500" />
+          ) : (
+            <BellOff size={16} />
+          )}
         </Button>
       </div>
 
-      {/* Modal tiempo personalizado */}
+      {/* Modos */}
+      <div className="grid grid-cols-4 gap-2">
+        {["pomodoro", "short", "long", "custom"].map((m) => (
+          <button
+            key={m}
+            onClick={() =>
+              m === "custom" ? setShowCustomModal(true) : handleModeChange(m)
+            }
+            className={`
+              py-2 px-3 rounded text-xs font-medium transition-colors
+              ${
+                mode === m
+                  ? "bg-orange text-white"
+                  : "bg-dark-tertiary text-gray-400 hover:bg-dark-tertiary/80"
+              }
+            `}
+          >
+            {m === "pomodoro"
+              ? "🍅"
+              : m === "short"
+              ? "☕"
+              : m === "long"
+              ? "🌙"
+              : "⏱️"}
+          </button>
+        ))}
+      </div>
+
+      {/* Modal de tiempo personalizado */}
       <Modal
         isOpen={showCustomModal}
         onClose={() => setShowCustomModal(false)}
-        title="Temporizador Personalizado"
+        title="Tiempo Personalizado"
         footer={
           <>
             <Button variant="ghost" onClick={() => setShowCustomModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleCustomTime}>Iniciar</Button>
+            <Button onClick={handleCustomTime}>Aplicar</Button>
           </>
         }
       >
-        <div className="space-y-4">
-          <Input
-            label="Minutos"
-            type="number"
-            min="1"
-            max="180"
-            value={localCustomMinutes}
-            onChange={(e) =>
-              setLocalCustomMinutes(parseInt(e.target.value) || 25)
-            }
-            placeholder="Ej: 30"
-          />
-          <p className="text-xs text-gray-400">
-            Ingresa entre 1 y 180 minutos (3 horas máximo)
-          </p>
-        </div>
-      </Modal>
-
-      {/* Modal configuración de sonido */}
-      <Modal
-        isOpen={showSoundModal}
-        onClose={() => setShowSoundModal(false)}
-        title="Configuración de Sonido"
-        footer={
-          <Button onClick={() => setShowSoundModal(false)}>Guardar</Button>
-        }
-      >
-        <SoundSettings />
+        <Input
+          type="number"
+          label="Minutos"
+          value={localCustomMinutes}
+          onChange={(e) => setLocalCustomMinutes(e.target.value)}
+          min="1"
+          max="180"
+          placeholder="Ej: 30"
+        />
       </Modal>
     </div>
   );

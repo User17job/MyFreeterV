@@ -1,8 +1,4 @@
-// ============================================
-// 4. WIDGET GRID - CON MARGEN DINÁMICO
-// src/components/dashboard/WidgetGrid.jsx
-// ============================================
-
+// src/components/dashboard/WidgetGrid.jsx - CORREGIDO PARA MÓVIL
 import { Responsive, WidthProvider } from "react-grid-layout";
 import { WidgetContainer } from "@/components/widgets/WidgetContainer";
 import { TodoWidget } from "@/components/widgets/TodoWidget";
@@ -25,14 +21,52 @@ const WIDGET_COMPONENTS = {
   links: LinksWidget,
 };
 
+// 🔥 HELPER SEGURO PARA LOCALSTORAGE
+const safeLocalStorage = {
+  getItem: (key) => {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return null;
+      return window.localStorage.getItem(key);
+    } catch (e) {
+      console.warn("localStorage not available:", e);
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      console.warn("localStorage not available:", e);
+      return false;
+    }
+  },
+  removeItem: (key) => {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch (e) {
+      console.warn("localStorage not available:", e);
+      return false;
+    }
+  },
+};
+
 export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
   const { widgets, updateWidget, deleteWidget } = useWidgetStore();
+  const [isClient, setIsClient] = useState(false);
+  const [savedLayouts, setSavedLayouts] = useState({});
 
   const isDraggingRef = useRef(false);
   const saveTimeoutRef = useRef(null);
   const gridRef = useRef(null);
-  const containerRef = useRef(null);
-  const [containerWidth, setContainerWidth] = useState(0);
+
+  // 🔥 ESPERAR A QUE EL CLIENTE ESTÉ LISTO
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Filtrar widgets por tab
   const tabWidgets = useMemo(
@@ -50,45 +84,60 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
     return sidebarCollapsed ? "64px" : "256px";
   };
 
-  // CARGAR LAYOUTS DESDE LOCALSTORAGE
-  const loadLayoutFromStorage = useCallback(
-    (breakpoint) => {
-      try {
-        const key = `layout-${activeTab}-${breakpoint}`;
-        const saved = localStorage.getItem(key);
+  // 🔥 CARGAR LAYOUTS SOLO DESPUÉS DE QUE EL CLIENTE ESTÉ LISTO
+  useEffect(() => {
+    if (!isClient) return;
 
-        if (saved) {
-          const layout = JSON.parse(saved);
-          const currentWidgetIds = tabWidgets.map((w) => w.id);
-          return layout.filter((item) => currentWidgetIds.includes(item.i));
+    const loadAllLayouts = () => {
+      const loaded = {};
+      ["lg", "md", "sm", "xs"].forEach((breakpoint) => {
+        try {
+          const key = `layout-${activeTab}-${breakpoint}`;
+          const saved = safeLocalStorage.getItem(key);
+
+          if (saved) {
+            const layout = JSON.parse(saved);
+            const currentWidgetIds = tabWidgets.map((w) => w.id);
+            loaded[breakpoint] = layout.filter((item) =>
+              currentWidgetIds.includes(item.i)
+            );
+          }
+        } catch (e) {
+          console.warn(`Error loading layout ${breakpoint}:`, e);
         }
-      } catch (e) {
-        console.error("Error loading layout:", e);
-      }
-      return null;
-    },
-    [activeTab, tabWidgets]
-  );
+      });
+
+      setSavedLayouts(loaded);
+    };
+
+    // Pequeño delay para asegurar que todo esté listo
+    const timeoutId = setTimeout(loadAllLayouts, 100);
+    return () => clearTimeout(timeoutId);
+  }, [isClient, activeTab, tabWidgets]);
 
   // GUARDAR LAYOUTS EN LOCALSTORAGE
   const saveLayoutToStorage = useCallback(
     (layout, breakpoint) => {
+      if (!isClient) return;
+
       try {
         const key = `layout-${activeTab}-${breakpoint}`;
-        localStorage.setItem(key, JSON.stringify(layout));
+        safeLocalStorage.setItem(key, JSON.stringify(layout));
+
+        // Actualizar estado local también
+        setSavedLayouts((prev) => ({
+          ...prev,
+          [breakpoint]: layout,
+        }));
       } catch (e) {
-        console.error("Error saving layout:", e);
+        console.warn("Error saving layout:", e);
       }
     },
-    [activeTab]
+    [activeTab, isClient]
   );
 
-  // LAYOUTS CON LOCALSTORAGE Y FALLBACK
+  // 🔥 LAYOUTS CON FALLBACK SEGURO
   const layouts = useMemo(() => {
-    const savedLg = loadLayoutFromStorage("lg");
-    const savedMd = loadLayoutFromStorage("md");
-    const savedSm = loadLayoutFromStorage("sm");
-
     const currentWidgetIds = new Set(tabWidgets.map((w) => w.id));
 
     const isLayoutValid = (layout) => {
@@ -96,6 +145,7 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
       return layout.every((item) => currentWidgetIds.has(item.i));
     };
 
+    // Layouts por defecto
     const defaultLgLayout = tabWidgets.map((w, index) => ({
       i: w.id,
       x: (index % 3) * 4,
@@ -127,15 +177,17 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
     }));
 
     return {
-      lg: isLayoutValid(savedLg) ? savedLg : defaultLgLayout,
-      md: isLayoutValid(savedMd) ? savedMd : defaultMdLayout,
-      sm: isLayoutValid(savedSm) ? savedSm : defaultSmLayout,
-      xs: isLayoutValid(savedSm) ? savedSm : defaultSmLayout,
+      lg: isLayoutValid(savedLayouts.lg) ? savedLayouts.lg : defaultLgLayout,
+      md: isLayoutValid(savedLayouts.md) ? savedLayouts.md : defaultMdLayout,
+      sm: isLayoutValid(savedLayouts.sm) ? savedLayouts.sm : defaultSmLayout,
+      xs: isLayoutValid(savedLayouts.xs) ? savedLayouts.xs : defaultSmLayout,
     };
-  }, [tabWidgets, loadLayoutFromStorage]);
+  }, [tabWidgets, savedLayouts]);
 
   const handleLayoutChange = useCallback(
     (layout, allLayouts) => {
+      if (!isClient) return;
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
@@ -148,7 +200,7 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
         }
       }, 500);
     },
-    [saveLayoutToStorage]
+    [saveLayoutToStorage, isClient]
   );
 
   const handleDragStart = useCallback(() => {
@@ -156,7 +208,7 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
   }, []);
 
   const handleDragStop = useCallback(
-    (layout, oldItem, newItem) => {
+    (layout) => {
       isDraggingRef.current = false;
       const breakpoint = getCurrentBreakpoint();
       saveLayoutToStorage(layout, breakpoint);
@@ -165,7 +217,7 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
   );
 
   const handleResizeStop = useCallback(
-    (layout, oldItem, newItem) => {
+    (layout) => {
       const breakpoint = getCurrentBreakpoint();
       saveLayoutToStorage(layout, breakpoint);
     },
@@ -173,6 +225,7 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
   );
 
   const getCurrentBreakpoint = () => {
+    if (typeof window === "undefined") return "lg";
     const width = window.innerWidth;
     if (width >= 1200) return "lg";
     if (width >= 996) return "md";
@@ -182,25 +235,28 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
 
   const handleDelete = useCallback(
     async (widgetId) => {
-      if (window.confirm("¿Estás seguro de eliminar este widget?")) {
-        await deleteWidget(widgetId);
+      if (!window.confirm("¿Estás seguro de eliminar este widget?")) return;
 
+      await deleteWidget(widgetId);
+
+      // Limpiar layouts guardados
+      if (isClient) {
         ["lg", "md", "sm", "xs"].forEach((breakpoint) => {
           try {
             const key = `layout-${activeTab}-${breakpoint}`;
-            const saved = localStorage.getItem(key);
+            const saved = safeLocalStorage.getItem(key);
             if (saved) {
               const layout = JSON.parse(saved);
               const newLayout = layout.filter((item) => item.i !== widgetId);
-              localStorage.setItem(key, JSON.stringify(newLayout));
+              safeLocalStorage.setItem(key, JSON.stringify(newLayout));
             }
           } catch (e) {
-            console.error("Error cleaning layout:", e);
+            console.warn("Error cleaning layout:", e);
           }
         });
       }
     },
-    [deleteWidget, activeTab]
+    [deleteWidget, activeTab, isClient]
   );
 
   const handleTitleChange = useCallback(
@@ -218,59 +274,27 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
     };
   }, []);
 
+  // 🔥 NO RENDERIZAR HASTA QUE EL CLIENTE ESTÉ LISTO
+  if (!isClient) {
+    return (
+      <div className="p-4 md:p-6 min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-orange-brown border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 text-sm">Preparando widgets...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      ref={containerRef}
       className={`p-4 md:p-6 min-h-full transition-all duration-300 ${
         isMobile ? "pb-24" : ""
       }`}
       style={{ marginLeft: getMarginLeft() }}
     >
-      <ResponsiveGridLayout
-        ref={gridRef}
-        className="layout"
-        layouts={layouts}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-        cols={{ lg: 12, md: 6, sm: 1, xs: 1 }}
-        rowHeight={isMobile ? 100 : 150}
-        onLayoutChange={handleLayoutChange}
-        onDragStart={handleDragStart}
-        onDragStop={handleDragStop}
-        onResizeStop={handleResizeStop}
-        draggableHandle=".drag-handle"
-        containerPadding={[0, 0]}
-        margin={isMobile ? [12, 12] : [16, 16]}
-        isDraggable={true}
-        isResizable={true}
-        compactType="vertical"
-        preventCollision={false}
-        useCSSTransforms={true}
-        transformScale={1}
-      >
-        {tabWidgets.map((widget) => {
-          const WidgetComponent = WIDGET_COMPONENTS[widget.type];
-
-          if (!WidgetComponent) return null;
-
-          return (
-            <div key={widget.id}>
-              <WidgetContainer
-                title={widget.title}
-                onDelete={() => handleDelete(widget.id)}
-                onTitleChange={(newTitle) =>
-                  handleTitleChange(widget.id, newTitle)
-                }
-                isMobile={isMobile}
-              >
-                <WidgetComponent widget={widget} />
-              </WidgetContainer>
-            </div>
-          );
-        })}
-      </ResponsiveGridLayout>
-
-      {tabWidgets.length === 0 && (
-        <div className="h-full flex items-center justify-center">
+      {tabWidgets.length === 0 ? (
+        <div className="h-full flex items-center justify-center min-h-[60vh]">
           <div className="text-center px-4">
             <div className="text-6xl mb-4">📦</div>
             <h3 className="text-xl font-semibold text-white mb-2">
@@ -283,6 +307,52 @@ export function WidgetGrid({ activeTab, sidebarCollapsed, isMobile }) {
             </p>
           </div>
         </div>
+      ) : (
+        <ResponsiveGridLayout
+          ref={gridRef}
+          className="layout"
+          layouts={layouts}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
+          cols={{ lg: 12, md: 6, sm: 1, xs: 1 }}
+          rowHeight={isMobile ? 100 : 150}
+          onLayoutChange={handleLayoutChange}
+          onDragStart={handleDragStart}
+          onDragStop={handleDragStop}
+          onResizeStop={handleResizeStop}
+          draggableHandle=".drag-handle"
+          containerPadding={[0, 0]}
+          margin={isMobile ? [12, 12] : [16, 16]}
+          isDraggable={true}
+          isResizable={!isMobile} // Deshabilitar resize en móvil
+          compactType="vertical"
+          preventCollision={false}
+          useCSSTransforms={true}
+          transformScale={1}
+        >
+          {tabWidgets.map((widget) => {
+            const WidgetComponent = WIDGET_COMPONENTS[widget.type];
+
+            if (!WidgetComponent) {
+              console.warn(`Widget type not found: ${widget.type}`);
+              return null;
+            }
+
+            return (
+              <div key={widget.id}>
+                <WidgetContainer
+                  title={widget.title}
+                  onDelete={() => handleDelete(widget.id)}
+                  onTitleChange={(newTitle) =>
+                    handleTitleChange(widget.id, newTitle)
+                  }
+                  isMobile={isMobile}
+                >
+                  <WidgetComponent widget={widget} />
+                </WidgetContainer>
+              </div>
+            );
+          })}
+        </ResponsiveGridLayout>
       )}
     </div>
   );

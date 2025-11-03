@@ -1,6 +1,13 @@
-// src/components/widgets/CalendarWidget.jsx - CORREGIDO CON MODAL RESPONSIVE
+// src/components/widgets/CalendarWidget.jsx - CON EVENTOS RECURRENTES const { data, error } = await supabase
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Clock } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2,
+  Clock,
+  Repeat,
+} from "lucide-react";
 import {
   format,
   startOfMonth,
@@ -9,6 +16,11 @@ import {
   isSameMonth,
   isToday,
   isSameDay,
+  addDays,
+  addWeeks,
+  addMonths,
+  isAfter,
+  isBefore,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +32,27 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 import { useTabsStore } from "@/store/tabsStore";
 import { notifyCalendarEvent } from "@/utils/notificationUtils";
-import { useNotificationStore } from "@/store/notificationStore";
+
+// 🔥 HELPER SEGURO PARA SESSIONSTORAGE
+const safeSessionStorage = {
+  getItem: (key) => {
+    try {
+      if (typeof window === "undefined" || !window.sessionStorage) return null;
+      return window.sessionStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      if (typeof window === "undefined" || !window.sessionStorage) return false;
+      window.sessionStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+};
 
 export function CalendarWidget({ widget }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -33,7 +65,12 @@ export function CalendarWidget({ widget }) {
     time: "09:00",
     description: "",
     tab: widget.data?.tab || "mi-vida",
+    recurring: "none", // 🆕
+    recurringEndDate: "", // 🆕
   });
+
+  const [isClient, setIsClient] = useState(false);
+
   const user = useAuthStore((state) => state.user);
   const { tabs } = useTabsStore();
 
@@ -41,82 +78,180 @@ export function CalendarWidget({ widget }) {
   const currentTab = widget.data?.tab;
 
   useEffect(() => {
-    fetchEvents();
-  }, [widget.id, currentDate, isGlobalCalendar, currentTab]);
+    setIsClient(true);
+  }, []);
 
-  // Verificar eventos próximos y notificar
   useEffect(() => {
-    if (!isGlobalCalendar) return;
+    if (isClient && user?.id) {
+      fetchEvents();
+    }
+  }, [
+    widget.id,
+    currentDate,
+    isGlobalCalendar,
+    currentTab,
+    isClient,
+    user?.id,
+  ]);
+
+  // 🔥 SISTEMA DE NOTIFICACIONES MEJORADO - Solo notifica una vez al día
+  useEffect(() => {
+    if (!isGlobalCalendar || !isClient || events.length === 0) return;
 
     const checkUpcomingEvents = () => {
       const today = new Date();
+      const todayKey = format(today, "yyyy-MM-dd");
+
+      // Verificar si ya notificamos hoy
+      const lastNotificationDate = safeSessionStorage.getItem(
+        "last-calendar-check"
+      );
+      if (lastNotificationDate === todayKey) {
+        return; // Ya notificamos hoy, no volver a notificar
+      }
+
       today.setHours(0, 0, 0, 0);
+      let hasNotified = false;
 
       events.forEach((event) => {
-        const eventDate = new Date(event.start_time);
-        eventDate.setHours(0, 0, 0, 0);
+        try {
+          const eventDate = new Date(event.start_time);
+          eventDate.setHours(0, 0, 0, 0);
 
-        const daysUntil = Math.ceil(
-          (eventDate - today) / (1000 * 60 * 60 * 24)
-        );
+          const daysUntil = Math.ceil(
+            (eventDate - today) / (1000 * 60 * 60 * 24)
+          );
 
-        // Notificar eventos a 2 días o menos
-        if (daysUntil >= 0 && daysUntil <= 2) {
-          // Verificar si ya se notificó (evitar duplicados)
-          const notificationKey = `calendar-${event.id}-${daysUntil}`;
-          const hasNotified = sessionStorage.getItem(notificationKey);
-
-          if (!hasNotified) {
+          // Notificar eventos próximos (hoy, mañana, en 2 días)
+          if (daysUntil >= 0 && daysUntil <= 2) {
             notifyCalendarEvent(event, daysUntil);
-            sessionStorage.setItem(notificationKey, "true");
+            hasNotified = true;
           }
+        } catch (error) {
+          console.warn("Error checking event:", error);
         }
       });
+
+      // Marcar que ya notificamos hoy
+      if (hasNotified) {
+        safeSessionStorage.setItem("last-calendar-check", todayKey);
+      }
     };
 
+    // Verificar al cargar
     checkUpcomingEvents();
 
-    // Verificar cada 1 hora
-    const interval = setInterval(checkUpcomingEvents, 60 * 60 * 1000);
+    // Verificar a medianoche (cada 24 horas)
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const msUntilMidnight = midnight - now;
 
-    return () => clearInterval(interval);
-  }, [events, isGlobalCalendar]);
+    const midnightTimeout = setTimeout(() => {
+      checkUpcomingEvents();
+      // Luego cada 24 horas
+      const interval = setInterval(checkUpcomingEvents, 24 * 60 * 60 * 1000);
+      return () => clearInterval(interval);
+    }, msUntilMidnight);
+
+    return () => clearTimeout(midnightTimeout);
+  }, [events, isGlobalCalendar, isClient]);
+
+  // 🆕 AGREGAR ESTA FUNCIÓN
+  const generateRecurringInstances = (event, monthStart, monthEnd) => {
+    if (!event.recurring_pattern || event.recurring_pattern === "none") {
+      return [event];
+    }
+
+    const instances = [];
+    const eventStart = new Date(event.start_time);
+    const recurringEnd = event.recurring_end_date
+      ? new Date(event.recurring_end_date)
+      : addMonths(monthEnd, 12);
+
+    let currentDate = new Date(eventStart);
+
+    while (
+      isBefore(currentDate, recurringEnd) ||
+      isSameDay(currentDate, recurringEnd)
+    ) {
+      if (
+        (isAfter(currentDate, monthStart) ||
+          isSameDay(currentDate, monthStart)) &&
+        (isBefore(currentDate, monthEnd) || isSameDay(currentDate, monthEnd))
+      ) {
+        const instanceStart = new Date(currentDate);
+        const instanceEnd = new Date(event.end_time);
+        const timeDiff = instanceEnd - new Date(event.start_time);
+        instanceEnd.setTime(instanceStart.getTime() + timeDiff);
+
+        instances.push({
+          ...event,
+          start_time: instanceStart.toISOString(),
+          end_time: instanceEnd.toISOString(),
+          isRecurringInstance: true,
+          originalEventId: event.id,
+        });
+      }
+
+      switch (event.recurring_pattern) {
+        case "daily":
+          currentDate = addDays(currentDate, 1);
+          break;
+        case "weekly":
+          currentDate = addWeeks(currentDate, 1);
+          break;
+        case "monthly":
+          currentDate = addMonths(currentDate, 1);
+          break;
+        default:
+          currentDate = recurringEnd;
+      }
+
+      if (instances.length > 365) break;
+    }
+
+    return instances;
+  };
 
   const fetchEvents = async () => {
-    const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
+    try {
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
 
-    // Base query: todos los eventos del mes del usuario
-    const { data, error } = await supabase
-      .from("calendar_events")
-      .select("*")
-      .eq("user_id", user.id)
-      .gte("start_time", start.toISOString())
-      .lte("start_time", end.toISOString())
-      .order("start_time", { ascending: true });
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("start_time", { ascending: true });
 
-    if (error) {
+      if (error) throw error;
+
+      if (!data) {
+        setEvents([]);
+        return;
+      }
+
+      // Generar instancias de eventos recurrentes
+      let allEvents = [];
+      data.forEach((event) => {
+        const instances = generateRecurringInstances(event, start, end);
+        allEvents = [...allEvents, ...instances];
+      });
+
+      // Filtrar por tab si no es calendario global
+      let filteredEvents = allEvents;
+      if (!isGlobalCalendar) {
+        filteredEvents = allEvents.filter(
+          (event) => event.data?.tab === currentTab
+        );
+      }
+
+      setEvents(filteredEvents);
+    } catch (error) {
       console.error("Error fetching events:", error);
-      return;
-    }
-
-    if (!data) {
       setEvents([]);
-      return;
     }
-
-    // Filtrar en el cliente según el tipo de calendario
-    let filteredEvents = data;
-
-    if (isGlobalCalendar) {
-      // Calendario global: muestra TODOS los eventos
-      filteredEvents = data;
-    } else {
-      // Calendario de tab específica: muestra solo eventos de esa tab
-      filteredEvents = data.filter((event) => event.data?.tab === currentTab);
-    }
-
-    setEvents(filteredEvents);
   };
 
   const getDaysInMonth = () => {
@@ -124,12 +259,8 @@ export function CalendarWidget({ widget }) {
     const end = endOfMonth(currentDate);
     const days = eachDayOfInterval({ start, end });
 
-    // Obtener el día de la semana del primer día (0 = Domingo, 1 = Lunes, etc.)
     const firstDayOfWeek = start.getDay();
-    // Ajustar para que Lunes = 0 (en vez de Domingo = 0)
     const offset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-
-    // Agregar días vacíos al inicio para alinear correctamente
     const emptyDays = Array(offset).fill(null);
 
     return [...emptyDays, ...days];
@@ -146,7 +277,7 @@ export function CalendarWidget({ widget }) {
   };
 
   const handleDayClick = (day) => {
-    if (!day) return; // No hacer nada si es un día vacío
+    if (!day) return;
 
     const dayEvents = getEventsForDay(day);
     setSelectedDate(day);
@@ -161,42 +292,52 @@ export function CalendarWidget({ widget }) {
   const handleAddEvent = async () => {
     if (!newEvent.title.trim() || !selectedDate) return;
 
-    const startTime = new Date(selectedDate);
-    const [hours, minutes] = newEvent.time.split(":");
-    startTime.setHours(parseInt(hours), parseInt(minutes));
+    try {
+      const startTime = new Date(selectedDate);
+      const [hours, minutes] = newEvent.time.split(":");
+      startTime.setHours(parseInt(hours), parseInt(minutes));
 
-    const endTime = new Date(startTime);
-    endTime.setHours(startTime.getHours() + 1);
+      const endTime = new Date(startTime);
+      endTime.setHours(startTime.getHours() + 1);
 
-    const { data, error } = await supabase
-      .from("calendar_events")
-      .insert([
-        {
-          user_id: user.id,
-          widget_id: widget.id,
-          title: newEvent.title,
-          description: newEvent.description,
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          color: getTabColor(newEvent.tab),
-          data: {
-            tab: newEvent.tab,
-            createdFrom: isGlobalCalendar ? "global" : currentTab,
-          },
+      const eventData = {
+        user_id: user.id,
+        widget_id: widget.id,
+        title: newEvent.title,
+        description: newEvent.description,
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
+        color: getTabColor(newEvent.tab),
+        // 🆕 AGREGAR ESTAS DOS LÍNEAS:
+        recurring_pattern: newEvent.recurring,
+        recurring_end_date: newEvent.recurringEndDate || null,
+        data: {
+          tab: newEvent.tab,
+          createdFrom: isGlobalCalendar ? "global" : currentTab,
         },
-      ])
-      .select()
-      .single();
+      };
 
-    if (!error && data) {
-      setEvents([...events, data]);
-      setShowEventModal(false);
-      setNewEvent({
-        title: "",
-        time: "09:00",
-        description: "",
-        tab: widget.data?.tab || "mi-vida",
-      });
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .insert([eventData])
+        .select()
+        .single();
+
+      if (!error && data) {
+        // Recargar eventos para mostrar instancias recurrentes
+        fetchEvents();
+        setShowEventModal(false);
+        setNewEvent({
+          title: "",
+          time: "09:00",
+          description: "",
+          tab: widget.data?.tab || "mi-vida",
+          recurring: "none",
+          recurringEndDate: "",
+        });
+      }
+    } catch (error) {
+      console.error("Error adding event:", error);
     }
   };
 
@@ -211,16 +352,51 @@ export function CalendarWidget({ widget }) {
     return colors[tabId] || "#c67236";
   };
 
-  const deleteEvent = async (eventId) => {
-    const { error } = await supabase
-      .from("calendar_events")
-      .delete()
-      .eq("id", eventId);
+  const deleteEvent = async (event) => {
+    try {
+      // Si es una instancia recurrente, preguntar qué hacer
+      if (event.isRecurringInstance) {
+        const deleteAll = window.confirm(
+          "¿Deseas eliminar todas las repeticiones de este evento o solo esta?"
+        );
 
-    if (!error) {
-      setEvents(events.filter((e) => e.id !== eventId));
+        if (deleteAll) {
+          // Eliminar el evento original
+          const { error } = await supabase
+            .from("calendar_events")
+            .delete()
+            .eq("id", event.originalEventId);
+
+          if (!error) {
+            fetchEvents(); // Recargar para actualizar todas las instancias
+          }
+        } else {
+          // TODO: Implementar eliminación de instancia única
+          alert("Función de eliminar instancia única próximamente");
+        }
+      } else {
+        // Eliminar evento normal
+        const { error } = await supabase
+          .from("calendar_events")
+          .delete()
+          .eq("id", event.id);
+
+        if (!error) {
+          setEvents(events.filter((e) => e.id !== event.id));
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting event:", error);
     }
   };
+
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-gray-400 text-sm">Cargando calendario...</div>
+      </div>
+    );
+  }
 
   const days = getDaysInMonth();
   const monthName = format(currentDate, "MMMM yyyy", { locale: es });
@@ -294,7 +470,6 @@ export function CalendarWidget({ widget }) {
         ))}
 
         {days.map((day, i) => {
-          // Si es un día vacío (null), renderizar celda vacía
           if (!day) {
             return <div key={i} className="aspect-square" />;
           }
@@ -323,10 +498,18 @@ export function CalendarWidget({ widget }) {
                   {dayEvents.slice(0, 3).map((event, i) => (
                     <div
                       key={i}
-                      className="w-1 h-1 rounded-full"
+                      className="w-1 h-1 rounded-full relative"
                       style={{ backgroundColor: event.color || "#c67236" }}
                       title={event.title}
-                    />
+                    >
+                      {/* Indicador de evento recurrente */}
+                      {event.isRecurringInstance && (
+                        <Repeat
+                          size={8}
+                          className="absolute -top-1 -right-1 text-white"
+                        />
+                      )}
+                    </div>
                   ))}
                   {dayEvents.length > 3 && (
                     <div className="w-1 h-1 rounded-full bg-gray-500" />
@@ -338,7 +521,7 @@ export function CalendarWidget({ widget }) {
         })}
       </div>
 
-      {/* Modal para ver eventos del día - CON PORTAL */}
+      {/* Modal para ver eventos del día */}
       <Modal
         isOpen={showDayEventsModal}
         onClose={() => setShowDayEventsModal(false)}
@@ -363,18 +546,18 @@ export function CalendarWidget({ widget }) {
               No hay eventos este día
             </p>
           ) : (
-            selectedDateEvents.map((event) => {
+            selectedDateEvents.map((event, idx) => {
               const eventTab = getTabInfo(event.data?.tab);
               return (
                 <div
-                  key={event.id}
+                  key={event.id + "-" + idx}
                   className="p-3 bg-dark-tertiary rounded-lg group relative"
                   style={{
                     borderLeft: `4px solid ${event.color || "#c67236"}`,
                   }}
                 >
                   <button
-                    onClick={() => deleteEvent(event.id)}
+                    onClick={() => deleteEvent(event)}
                     className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-400"
                   >
                     <Trash2 size={14} />
@@ -382,7 +565,19 @@ export function CalendarWidget({ widget }) {
                   <div className="flex items-start gap-2 mb-2">
                     <Clock size={16} className="text-orange mt-0.5" />
                     <div className="flex-1">
-                      <h4 className="text-white font-medium">{event.title}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-white font-medium">
+                          {event.title}
+                        </h4>
+
+                        {event.isRecurringInstance && (
+                          <Repeat
+                            size={14}
+                            className="text-orange"
+                            title="Evento recurrente"
+                          />
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400">
                         {format(new Date(event.start_time), "HH:mm")} -{" "}
                         {format(new Date(event.end_time), "HH:mm")}
@@ -404,7 +599,7 @@ export function CalendarWidget({ widget }) {
         </div>
       </Modal>
 
-      {/* Modal para agregar evento - CON PORTAL */}
+      {/* Modal para agregar evento */}
       <Modal
         isOpen={showEventModal}
         onClose={() => setShowEventModal(false)}
@@ -444,6 +639,47 @@ export function CalendarWidget({ widget }) {
             placeholder="Detalles del evento..."
             rows={3}
           />
+          {/* 🆕 AGREGAR SELECTOR DE RECURRENCIA */}
+          <Select
+            label="Repetir"
+            value={newEvent.recurring}
+            onChange={(e) =>
+              setNewEvent({ ...newEvent, recurring: e.target.value })
+            }
+            options={[
+              { value: "none", label: "No repetir" },
+              { value: "daily", label: "🔄 Diariamente" },
+              { value: "weekly", label: "📅 Semanalmente" },
+              { value: "monthly", label: "📆 Mensualmente" },
+            ]}
+          />
+
+          {/* Fecha de fin si es recurrente */}
+          {newEvent.recurring !== "none" && (
+            <Input
+              label="Repetir hasta (opcional)"
+              type="date"
+              value={newEvent.recurringEndDate}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, recurringEndDate: e.target.value })
+              }
+              min={format(selectedDate || new Date(), "yyyy-MM-dd")}
+            />
+          )}
+
+          {/* Fecha de fin si es recurrente */}
+          {newEvent.recurring !== "none" && (
+            <Input
+              label="Repetir hasta (opcional)"
+              type="date"
+              value={newEvent.recurringEndDate}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, recurringEndDate: e.target.value })
+              }
+              min={format(selectedDate || new Date(), "yyyy-MM-dd")}
+            />
+          )}
+
           <Select
             label={isGlobalCalendar ? "Asignar a Dashboard" : "Dashboard"}
             value={newEvent.tab}

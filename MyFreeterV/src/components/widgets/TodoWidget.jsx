@@ -1,4 +1,4 @@
-// src/components/widgets/TodoWidget.jsx - CON EDICIÓN
+// src/components/widgets/TodoWidget.jsx - SEGURO PARA MÓVIL
 import { useState, useEffect } from "react";
 import { Plus, Check, Trash2, Circle, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/Input";
@@ -12,21 +12,37 @@ export function TodoWidget({ widget }) {
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [error, setError] = useState(null);
+
   const user = useAuthStore((state) => state.user);
 
+  // 🔥 ESPERAR A QUE EL CLIENTE ESTÉ LISTO
   useEffect(() => {
-    fetchTodos();
-  }, [widget.id]);
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && user?.id && widget?.id) {
+      fetchTodos();
+    }
+  }, [widget?.id, isClient, user?.id]);
 
   const fetchTodos = async () => {
-    const { data, error } = await supabase
-      .from("todos")
-      .select("*")
-      .eq("widget_id", widget.id)
-      .order("created_at", { ascending: false });
+    try {
+      setError(null);
+      const { data, error } = await supabase
+        .from("todos")
+        .select("*")
+        .eq("widget_id", widget.id)
+        .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      setTodos(data);
+      if (error) throw error;
+      setTodos(data || []);
+    } catch (err) {
+      console.error("Error fetching todos:", err);
+      setError("Error al cargar tareas");
+      setTodos([]);
     }
   };
 
@@ -35,36 +51,52 @@ export function TodoWidget({ widget }) {
     if (!newTodo.trim()) return;
 
     setLoading(true);
-    const { data, error } = await supabase
-      .from("todos")
-      .insert([
-        {
-          user_id: user.id,
-          widget_id: widget.id,
-          title: newTodo.trim(),
-          completed: false,
-        },
-      ])
-      .select()
-      .single();
+    setError(null);
 
-    if (!error && data) {
-      setTodos([data, ...todos]);
-      setNewTodo("");
+    try {
+      const { data, error } = await supabase
+        .from("todos")
+        .insert([
+          {
+            user_id: user.id,
+            widget_id: widget.id,
+            title: newTodo.trim(),
+            completed: false,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setTodos([data, ...todos]);
+        setNewTodo("");
+      }
+    } catch (err) {
+      console.error("Error adding todo:", err);
+      setError("Error al agregar tarea");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const toggleTodo = async (todoId, completed) => {
-    const { data, error } = await supabase
-      .from("todos")
-      .update({ completed: !completed })
-      .eq("id", todoId)
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("todos")
+        .update({ completed: !completed })
+        .eq("id", todoId)
+        .select()
+        .single();
 
-    if (!error && data) {
-      setTodos(todos.map((t) => (t.id === todoId ? data : t)));
+      if (error) throw error;
+
+      if (data) {
+        setTodos(todos.map((t) => (t.id === todoId ? data : t)));
+      }
+    } catch (err) {
+      console.error("Error toggling todo:", err);
     }
   };
 
@@ -76,17 +108,23 @@ export function TodoWidget({ widget }) {
   const saveEdit = async (todoId) => {
     if (!editingText.trim()) return;
 
-    const { data, error } = await supabase
-      .from("todos")
-      .update({ title: editingText.trim() })
-      .eq("id", todoId)
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("todos")
+        .update({ title: editingText.trim() })
+        .eq("id", todoId)
+        .select()
+        .single();
 
-    if (!error && data) {
-      setTodos(todos.map((t) => (t.id === todoId ? data : t)));
-      setEditingId(null);
-      setEditingText("");
+      if (error) throw error;
+
+      if (data) {
+        setTodos(todos.map((t) => (t.id === todoId ? data : t)));
+        setEditingId(null);
+        setEditingText("");
+      }
+    } catch (err) {
+      console.error("Error saving edit:", err);
     }
   };
 
@@ -96,12 +134,24 @@ export function TodoWidget({ widget }) {
   };
 
   const deleteTodo = async (todoId) => {
-    const { error } = await supabase.from("todos").delete().eq("id", todoId);
+    try {
+      const { error } = await supabase.from("todos").delete().eq("id", todoId);
 
-    if (!error) {
+      if (error) throw error;
       setTodos(todos.filter((t) => t.id !== todoId));
+    } catch (err) {
+      console.error("Error deleting todo:", err);
     }
   };
+
+  // 🔥 NO RENDERIZAR HASTA QUE EL CLIENTE ESTÉ LISTO
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-gray-400 text-sm">Cargando tareas...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
