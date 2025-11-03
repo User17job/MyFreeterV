@@ -1,53 +1,51 @@
-// src/lib/supabase.js - VERIFICAR CONEXIÓN
+// src/lib/supabase.js - CORREGIDO
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validar que las credenciales existen
-let supabase;
-
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "❌ ERROR: Faltan las credenciales de Supabase en el archivo .env"
-  );
-  console.error("Por favor configura:");
-  console.error("VITE_SUPABASE_URL=tu_url_aqui");
-  console.error("VITE_SUPABASE_ANON_KEY=tu_key_aqui");
-  // En desarrollo, usar valores por defecto para evitar errores
-  if (import.meta.env.DEV) {
-    console.warn("⚠️ Usando configuración de desarrollo por defecto");
-    // Crear cliente con valores dummy para evitar crashes
-    supabase = createClient("https://dummy.supabase.co", "dummy-key", {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    });
-  }
-} else {
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
+  throw new Error("Faltan credenciales de Supabase");
+}
+
+// SOLUCIÓN AL ERROR 406: Configurar headers correctos
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    headers: {
+      // Esto soluciona el error 406
+      Accept: "application/json",
+      "Content-Type": "application/json",
     },
-  });
-}
+  },
+  db: {
+    schema: "public",
+  },
+  // Configuración para mejor manejo de errores en móvil
+  realtime: {
+    params: {
+      eventsPerSecond: 2,
+    },
+  },
+});
 
-export { supabase };
+// Helper para manejar errores de manera consistente
+export const handleSupabaseError = (error, context = "") => {
+  console.error(`❌ Supabase Error [${context}]:`, error);
 
-// Test de conexión (solo en desarrollo)
-if (import.meta.env.DEV && supabase) {
-  supabase.auth.getSession().then(({ data, error }) => {
-    if (error) {
-      console.error("❌ Error conectando a Supabase:", error.message);
-    } else {
-      console.log("✅ Supabase conectado correctamente");
-      if (data.session) {
-        console.log("👤 Usuario:", data.session.user.email);
-      }
-    }
-  });
-}
+  // Errores comunes y sus mensajes amigables
+  const errorMessages = {
+    406: "Error de configuración del servidor",
+    401: "Sesión expirada, por favor inicia sesión nuevamente",
+    403: "No tienes permisos para realizar esta acción",
+    404: "Recurso no encontrado",
+    500: "Error del servidor, intenta más tarde",
+  };
+
+  const statusCode = error?.code || error?.status?.toString();
+  return errorMessages[statusCode] || "Error al conectar con el servidor";
+};
